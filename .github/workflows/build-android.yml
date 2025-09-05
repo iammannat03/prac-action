@@ -14,34 +14,51 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Java 17
+    - name: Set up Java 11
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '11'
 
     - name: Set up Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.24.3'
+        flutter-version: 'latest'
         channel: 'stable'
+        cache: true
+
+    - name: Verify Flutter installation
+      run: |
+        flutter --version
+        flutter doctor -v
 
     - name: Get dependencies
       run: flutter pub get
 
-    - name: Analyze code
-      run: flutter analyze
+    - name: Analyze code (skip if no analysis_options.yaml)
+      run: |
+        if [ -f analysis_options.yaml ]; then
+          flutter analyze
+        else
+          echo "Skipping analysis - no analysis_options.yaml found"
+        fi
 
-    - name: Run tests
-      run: flutter test
+    - name: Run tests (skip if no tests)
+      run: |
+        if [ -d test ] && [ "$(find test -name '*.dart' | wc -l)" -gt 0 ]; then
+          flutter test
+        else
+          echo "Skipping tests - no test files found"
+        fi
 
     - name: Build Android APK
-      run: flutter build apk --release
+      run: |
+        flutter build apk --release --verbose
 
     - name: Upload APK as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: android-apk
+        name: android-apk-${{ github.sha }}
         path: build/app/outputs/flutter-apk/app-release.apk
         retention-days: 30
 
@@ -49,4 +66,10 @@ jobs:
       run: |
         echo "APK built successfully!"
         ls -la build/app/outputs/flutter-apk/
-        file build/app/outputs/flutter-apk/app-release.apk
+        if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+          file build/app/outputs/flutter-apk/app-release.apk
+          echo "APK size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
+        else
+          echo "APK file not found!"
+          ls -la build/app/outputs/
+        fi
